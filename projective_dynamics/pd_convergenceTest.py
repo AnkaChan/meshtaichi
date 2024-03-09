@@ -1,6 +1,22 @@
 import taichi as ti
 import meshtaichi_patcher as Patcher
 import argparse
+import json
+import numpy as np
+import tqdm
+
+inState = r'D:\Dropbox\01_MyDocuments\06_Papers\Siggraph_2023_VBD_OGC\05_experiments\Convergence\A00000120.json'
+init_state = r'D:\Dropbox\01_MyDocuments\06_Papers\Siggraph_2023_VBD_OGC\05_experiments\Convergence\A00000000_for_fixed pt_selection.json'
+
+def selectFixedPointsEars(initialStateFile, ):
+    data = json.load(open(initialStateFile))
+    pts = np.array(data["meshesState"][0]["position"])
+
+    selectedIds = np.where(
+        np.logical_and(np.logical_and(pts[:, 1]>0.35, pts[:, 0]>-0.17), pts[:, 0]< 0.17)
+                           )
+
+    return selectedIds[0]
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', default="models/deer.1.node")
@@ -184,13 +200,21 @@ def init():
         for i in ti.static(range(3)):
             u.x[i] = ti.random()
 
-def initMass():
+def initMassAndIntialState():
+    state = json.load(open(inState))
+    pos = np.array(state['meshesState'][0]['position'])
+    x.from_numpy(pos)
     mCpu = m.to_numpy()
-    mCpu[0] = 1e10
+
+    stateFileForFixedPointSelection = init_state
+    selectedIds = selectFixedPointsEars(stateFileForFixedPointSelection)
+
+    for id in selectedIds:
+        mCpu[id] = 1e10
     mesh.verts.m.from_numpy(mCpu)
 
 init()
-initMass()
+initMassAndIntialState()
 get_matrix()
 
 if args.test:
@@ -206,25 +230,31 @@ window = ti.ui.Window("Projective Dynamics", (1024, 768))
 canvas = window.get_canvas()
 scene = ti.ui.Scene()
 camera = ti.ui.Camera()
-camera.position(1, 1.5, 0)
+camera.position(0, 0.5, 1.5)
 camera.up(0, 1, 0)
 camera.lookat(0, 0, 0)
 camera.fov(75)
 
-while window.running:
+frameId = 0
+
+for iFrame in tqdm.tqdm(range(100)):
     newton()
-    camera.track_user_inputs(window, movement_speed=0.03, hold_key=ti.ui.RMB)
-    scene.set_camera(camera)
 
-    scene.mesh(mesh.verts.x, indices, color = (0.5, 0.5, 0.5))
-
-    scene.point_light(pos=(0.5, 1.5, 0.5), color=(1, 1, 1))
-    scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
-    scene.ambient_light((1, 1, 1))
-
-    canvas.scene(scene)
-
-    window.show()
-    for event in window.get_events(ti.ui.PRESS):
-        if event.key in [ti.ui.ESCAPE]:
-            window.running = False
+# while window.running:
+#     newton()
+#     camera.track_user_inputs(window, movement_speed=0.03, hold_key=ti.ui.RMB)
+#     scene.set_camera(camera)
+#
+#     scene.mesh(mesh.verts.x, indices, color = (0.5, 0.5, 0.5))
+#
+#     scene.point_light(pos=(0.5, 1.5, 0.5), color=(1, 1, 1))
+#     scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
+#     scene.ambient_light((1, 1, 1))
+#
+#     canvas.scene(scene)
+#     window.save_image(f"ScreenShot\\A" + str(frameId).zfill(4) + ".jpg")
+#     frameId = frameId + 1
+#     window.show()
+#     for event in window.get_events(ti.ui.PRESS):
+#         if event.key in [ti.ui.ESCAPE]:
+#             window.running = False
